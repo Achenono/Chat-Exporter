@@ -637,13 +637,24 @@ export function createZip(files) {
     return createZipFromPreparedEntries(entries);
 }
 
-export async function createCompressedZip(files, deflateRaw) {
+function yieldToEventLoop() {
+    return new Promise(resolve => setTimeout(resolve, 0));
+}
+
+export async function createCompressedZip(files, deflateRaw, onProgress) {
     if (typeof deflateRaw !== 'function') {
         throw new Error('Deflate compressor is required for compressed ZIP export.');
     }
 
     const entries = [];
-    for (const file of files) {
+    for (let index = 0; index < files.length; index += 1) {
+        const file = files[index];
+        onProgress?.({
+            stage: 'compressing',
+            current: index,
+            total: files.length,
+            path: file.path,
+        });
         const dataBytes = toBytes(file.data);
         const compressedBytes = dataBytes.length > 0 ? await deflateRaw(dataBytes) : dataBytes;
         const useCompressed = compressedBytes.length > 0 && compressedBytes.length < dataBytes.length;
@@ -653,7 +664,20 @@ export async function createCompressedZip(files, deflateRaw) {
             payloadBytes: useCompressed ? compressedBytes : dataBytes,
             method: useCompressed ? ZIP_METHOD_DEFLATE : ZIP_METHOD_STORE,
         });
+        onProgress?.({
+            stage: 'compressed',
+            current: index + 1,
+            total: files.length,
+            path: file.path,
+        });
     }
+    onProgress?.({
+        stage: 'assembling',
+        current: files.length,
+        total: files.length,
+        path: '',
+    });
+    await yieldToEventLoop();
     return createZipFromPreparedEntries(entries);
 }
 
@@ -746,7 +770,7 @@ export function createChatExportBundleByMode(model, mode = 'full') {
     return createSelectedChatExportBundle(model, getChatExportBundleDefinition(model, mode));
 }
 
-export async function createCompressedChatExportBundleByMode(model, mode, deflateRaw) {
+export async function createCompressedChatExportBundleByMode(model, mode, deflateRaw, onProgress) {
     const definition = getChatExportBundleDefinition(model, mode);
     return {
         key: definition.key,
@@ -754,6 +778,7 @@ export async function createCompressedChatExportBundleByMode(model, mode, deflat
         bytes: await createCompressedZip(
             definition.groups.flatMap(([directory, files]) => prefixPackageFiles(files, directory)),
             deflateRaw,
+            onProgress,
         ),
     };
 }

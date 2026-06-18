@@ -5,6 +5,8 @@ import { buildExportModel, createCompressedChatExportBundleByMode } from './expo
 const BUTTON_ID = 'acsus_chat_exporter_button';
 const EXPORT_MENU_LABEL = '聊天记录导出';
 const DIALOG_ID = 'acsus_chat_exporter_dialog';
+const PROGRESS_MIN = 0;
+const PROGRESS_MAX = 100;
 const EXPORT_MODES = [
     {
         value: 'user-context',
@@ -162,7 +164,91 @@ async function deflateRaw(dataBytes) {
 
 function closeExportDialog(dialog) {
     dialog.remove();
-    document.removeEventListener('keydown', dialog.acsusEscapeHandler);
+    if (dialog.acsusEscapeHandler) {
+        document.removeEventListener('keydown', dialog.acsusEscapeHandler);
+    }
+}
+
+function clampProgress(value) {
+    return Math.max(PROGRESS_MIN, Math.min(PROGRESS_MAX, Math.round(Number(value) || 0)));
+}
+
+function createProgressDialog() {
+    document.getElementById(DIALOG_ID)?.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = DIALOG_ID;
+    overlay.className = 'acsus-chat-exporter-dialog-backdrop acsus-chat-exporter-progress-backdrop';
+    overlay.innerHTML = [
+        '<div class="acsus-chat-exporter-dialog acsus-chat-exporter-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="acsus_chat_exporter_progress_title">',
+        '<div class="acsus-chat-exporter-dialog-header">',
+        '<div id="acsus_chat_exporter_progress_title" class="acsus-chat-exporter-dialog-title">正在准备聊天导出</div>',
+        '<div class="fa-solid fa-spinner fa-spin acsus-chat-exporter-progress-icon" aria-hidden="true"></div>',
+        '</div>',
+        '<div class="acsus-chat-exporter-progress-body">',
+        '<p class="acsus-chat-exporter-progress-message">浏览器正在整理并压缩 ZIP，请等待完成，不要刷新网页或关闭标签页。</p>',
+        '<div class="acsus-chat-exporter-progress-track" aria-hidden="true">',
+        '<div class="acsus-chat-exporter-progress-bar"></div>',
+        '</div>',
+        '<div class="acsus-chat-exporter-progress-meta">',
+        '<span class="acsus-chat-exporter-progress-stage">初始化</span>',
+        '<span class="acsus-chat-exporter-progress-percent">0%</span>',
+        '</div>',
+        '<div class="acsus-chat-exporter-progress-detail">正在启动导出任务...</div>',
+        '</div>',
+        '<div class="acsus-chat-exporter-dialog-actions">',
+        '<button type="button" class="menu_button acsus-chat-exporter-progress-close" disabled>处理中...</button>',
+        '</div>',
+        '</div>',
+    ].join('');
+
+    const title = overlay.querySelector('.acsus-chat-exporter-dialog-title');
+    const icon = overlay.querySelector('.acsus-chat-exporter-progress-icon');
+    const message = overlay.querySelector('.acsus-chat-exporter-progress-message');
+    const bar = overlay.querySelector('.acsus-chat-exporter-progress-bar');
+    const stage = overlay.querySelector('.acsus-chat-exporter-progress-stage');
+    const percent = overlay.querySelector('.acsus-chat-exporter-progress-percent');
+    const detail = overlay.querySelector('.acsus-chat-exporter-progress-detail');
+    const closeButton = overlay.querySelector('.acsus-chat-exporter-progress-close');
+
+    const update = ({
+        titleText,
+        iconClass = 'fa-solid fa-spinner fa-spin',
+        messageText,
+        stageText,
+        detailText,
+        progress,
+        closable = false,
+        closeLabel = '完成',
+        tone = '',
+    } = {}) => {
+        const nextProgress = clampProgress(progress);
+        overlay.classList.toggle('is-success', tone === 'success');
+        overlay.classList.toggle('is-error', tone === 'error');
+        if (titleText) title.textContent = titleText;
+        if (iconClass) icon.className = `${iconClass} acsus-chat-exporter-progress-icon`;
+        if (messageText) message.textContent = messageText;
+        if (stageText) stage.textContent = stageText;
+        if (detailText) detail.textContent = detailText;
+        bar.style.width = `${nextProgress}%`;
+        percent.textContent = `${nextProgress}%`;
+        closeButton.disabled = !closable;
+        closeButton.textContent = closable ? closeLabel : '处理中...';
+        if (closable) {
+            closeButton.focus();
+        }
+    };
+
+    closeButton.addEventListener('click', () => {
+        if (!closeButton.disabled) {
+            closeExportDialog(overlay);
+        }
+    });
+
+    document.body.append(overlay);
+    update({ progress: 1 });
+
+    return { update };
 }
 
 function openExportDialog(button) {
@@ -235,27 +321,101 @@ async function runExport(button, mode) {
     if (isExporting) return;
     isExporting = true;
     setButtonBusy(button, true, '导出中...');
+    const progressDialog = createProgressDialog();
 
     try {
+        progressDialog.update({
+            progress: 3,
+            stageText: '保存当前聊天',
+            detailText: '正在保存当前聊天，避免漏掉最新消息。',
+        });
         await saveChatConditional();
+
+        progressDialog.update({
+            progress: 8,
+            stageText: '读取聊天列表',
+            detailText: '正在读取 SillyTavern 可见聊天列表。',
+        });
         const sources = await collectBrowserVisibleSources((current, total) => {
+            const progress = 10 + ((current / Math.max(total, 1)) * 55);
             setButtonBusy(button, true, `导出中 ${current}/${total}`);
+            progressDialog.update({
+                progress,
+                stageText: `读取聊天 ${current}/${total}`,
+                detailText: '正在从 SillyTavern API 读取聊天内容。',
+            });
         });
 
         if (sources.length === 0) {
             throw new Error('没有找到可导出的聊天。');
         }
 
-        setButtonBusy(button, true, '正在压缩...');
+        progressDialog.update({
+            progress: 70,
+            stageText: '整理 Markdown',
+            detailText: '正在整理聊天、User 输入、上下文和索引。',
+        });
         const model = buildExportModel(sources, {
             contextWindow: 1,
             sourceMode: 'browser-visible-api',
         });
-        const bundle = await createCompressedChatExportBundleByMode(model, mode, deflateRaw);
+
+        setButtonBusy(button, true, '正在压缩...');
+        progressDialog.update({
+            progress: 76,
+            stageText: '压缩 ZIP',
+            detailText: '正在压缩导出文件，手机上可能需要多等一会。',
+        });
+        const bundle = await createCompressedChatExportBundleByMode(model, mode, deflateRaw, (event) => {
+            if (event.stage === 'assembling') {
+                progressDialog.update({
+                    progress: 97,
+                    stageText: '写入 ZIP',
+                    detailText: '正在写入 ZIP 目录，请继续等待。',
+                });
+                return;
+            }
+
+            const progress = 76 + ((event.current / Math.max(event.total, 1)) * 20);
+            progressDialog.update({
+                progress,
+                stageText: `压缩文件 ${event.current}/${event.total}`,
+                detailText: event.path ? `正在处理：${event.path}` : '正在压缩导出文件。',
+            });
+        });
+
+        progressDialog.update({
+            progress: 99,
+            stageText: '触发下载',
+            detailText: `正在交给浏览器下载：${bundle.fileName}`,
+        });
         download(bundle.bytes, bundle.fileName, 'application/zip');
+        progressDialog.update({
+            titleText: '聊天导出完成',
+            iconClass: 'fa-solid fa-circle-check',
+            messageText: 'ZIP 已经交给浏览器下载。手机如果没有弹出提示，请打开浏览器下载列表查看。',
+            stageText: '完成',
+            detailText: `${model.stats.chatCount} 个聊天，${model.stats.userInputCount} 条 User 输入。`,
+            progress: 100,
+            closable: true,
+            closeLabel: '完成',
+            tone: 'success',
+        });
         showSuccess(`聊天导出完成：${model.stats.chatCount} 个聊天，${model.stats.userInputCount} 条 User 输入。`);
     } catch (error) {
-        showError(error instanceof Error ? error.message : String(error));
+        const message = error instanceof Error ? error.message : String(error);
+        progressDialog.update({
+            titleText: '聊天导出失败',
+            iconClass: 'fa-solid fa-circle-exclamation',
+            messageText: '导出没有完成，当前页面可以继续使用。',
+            stageText: '失败',
+            detailText: message,
+            progress: 100,
+            closable: true,
+            closeLabel: '关闭',
+            tone: 'error',
+        });
+        showError(message);
     } finally {
         isExporting = false;
         setButtonBusy(button, false);
