@@ -1,0 +1,116 @@
+#acsus_chat_exporter_button.acsus-chat-exporter-busy {
+    opacity: 0.8;
+    pointer-events: none;
+}
+
+#acsus_chat_exporter_button .acsus-chat-exporter-label {
+    min-width: 0;
+}
+
+.acsus-chat-exporter-dialog-backdrop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100vw;
+    height: 100vh;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.45);
+    box-sizing: border-box;
+}
+
+.acsus-chat-exporter-dialog {
+    width: min(520px, 100%);
+    max-height: min(680px, calc(100vh - 32px));
+    overflow: auto;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    background: var(--SmartThemeBlurTintColor);
+    color: var(--SmartThemeBodyColor);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+
+.acsus-chat-exporter-dialog-header,
+.acsus-chat-exporter-dialog-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 12px;
+}
+
+.acsus-chat-exporter-dialog-header {
+    justify-content: space-between;
+    border-bottom: 1px solid var(--SmartThemeBorderColor);
+}
+
+.acsus-chat-exporter-dialog-title {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.acsus-chat-exporter-mode-list {
+    display: grid;
+    gap: 8px;
+    padding: 12px;
+}
+
+.acsus-chat-exporter-mode {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 10px;
+    align-items: start;
+    padding: 10px;
+    border: 1px solid var(--SmartThemeBorderColor);
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.acsus-chat-exporter-mode.is-selected {
+    border-color: var(--SmartThemeQuoteColor);
+    background: color-mix(in srgb, var(--SmartThemeQuoteColor) 14%, transparent);
+}
+
+.acsus-chat-exporter-mode input {
+    margin-top: 3px;
+}
+
+.acsus-chat-exporter-mode span {
+    display: grid;
+    gap: 4px;
+    min-width: 0;
+}
+
+.acsus-chat-exporter-mode strong,
+.acsus-chat-exporter-mode small {
+    overflow-wrap: anywhere;
+}
+
+.acsus-chat-exporter-mode small {
+    opacity: 0.8;
+}
+
+.acsus-chat-exporter-dialog-actions {
+    justify-content: flex-end;
+    border-top: 1px solid var(--SmartThemeBorderColor);
+}
+
+.acsus-chat-exporter-confirm {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+@media (max-width: 480px) {
+    .acsus-chat-exporter-dialog-backdrop {
+        align-items: flex-end;
+        padding: 8px;
+        height: 100dvh;
+    }
+
+    .acsus-chat-exporter-dialog {
+        max-height: calc(100vh - 16px);
+    }
+}

@@ -1,0 +1,15 @@
+{
+  "display_name": "Acsus-Chat-Exporter",
+  "loading_order": 12,
+  "requires": [],
+  "optional": [],
+  "js": "dist/index.js",
+  "css": "dist/index.css",
+  "author": "AcSus",
+  "version": "0.1.0",
+  "homePage": "https://github.com/Achenono/Chat-Exporter",
+  "auto_update": false,
+  "hooks": {
+    "activate": "init"
+  }
+}
