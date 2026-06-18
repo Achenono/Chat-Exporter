@@ -1,0 +1,9 @@
+{
+  "name": "acsus-chat-exporter",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export": "node tools/export-sillytavern-chats.mjs"
+  }
+}
